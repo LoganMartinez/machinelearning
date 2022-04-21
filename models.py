@@ -1,5 +1,7 @@
 import nn
 
+# temp comment to self to work here
+
 class PerceptronModel(object):
     def __init__(self, dimensions):
         """
