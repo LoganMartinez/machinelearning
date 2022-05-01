@@ -53,6 +53,23 @@ class RegressionModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        self.learn_rate = 0.2
+        #20 = layer size
+        # input layer
+        self.w1 = nn.Parameter(1,20)
+        self.b1 = nn.Parameter(1,20)
+        # adjacent layer
+        self.w2 = nn.Parameter(20,20)
+        self.b2 = nn.Parameter(1,20)
+        # outputlayer
+        self.w3 = nn.Parameter(20,1)
+        self.b3 = nn.Parameter(1,1)
+        # big enough batch size
+        self.batch_size = 200
+        # store all layer parameters
+        self.w =[self.w1, self.w2, self.w3]
+        self.b = [self.b1,self.b2, self.b3]
+
 
     def run(self, x):
         """
@@ -65,6 +82,27 @@ class RegressionModel(object):
         """
         "*** YOUR CODE HERE ***"
 
+        # input data is initially x
+        input = x
+        # loop thorugh based on number of neural network layers
+        for i in range(3):
+            # nn.Linear(features, weights) ; 
+            # use linear regression function to get output node with shape from output features * batch_size
+            # from features and weights
+            fx = nn.Linear(input,self.w[i])
+            output = nn.AddBias(fx, self.b[i])
+
+            # last layer of nn does not need to call (activation) fx
+            # activation fx decides whether neuron activates or not
+            if (i==2):
+                predicted_y=output
+            else:
+                # if not last layer of nn, call ReLu function, clear out neg entries (unactiv. nodes)
+                # calculate input data for next layer
+                input = nn.ReLU(output)
+        return predicted_y
+
+
     def get_loss(self, x, y):
         """
         Computes the loss for a batch of examples.
@@ -76,12 +114,33 @@ class RegressionModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+        return nn.SquareLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+
+        # store loss val and loop until loss accuracy reaches required limit
+        lossnum = float('inf')
+        count = 0
+        while lossnum >=0.01:
+            # get cobination of (x,y) from dataset as training data
+            for (x,y) in dataset.iterate_once(self.batch_size):
+                # calculate loss val with loss function
+                loss=self.get_loss(x,y)
+                lossnum = nn.as_scalar(loss)
+                # find gradient
+                grads = nn.gradients(loss, self.w +self.b)
+                # loop over parameters in gradient to update each weight and bias
+                for i in range(3):
+                    self.w[i].update(grads[i], -self.learn_rate)
+                    self.b[i].update(grads[len(self.w)+i],-self.learn_rate)
+                count+=1
+            print(count)
+
 
 class DigitClassificationModel(object):
     """
