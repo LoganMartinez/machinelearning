@@ -27,6 +27,8 @@ class PerceptronModel(object):
         Returns: a node containing a single number (the score)
         """
         "*** YOUR CODE HERE ***"
+        return nn.DotProduct(x,self.w)
+
 
     def get_prediction(self, x):
         """
@@ -35,12 +37,22 @@ class PerceptronModel(object):
         Returns: 1 or -1
         """
         "*** YOUR CODE HERE ***"
+        dot = nn.as_scalar(self.run(x))
+        return 1.0 if dot >= 0 else -1.0
 
     def train(self, dataset):
         """
         Train the perceptron until convergence.
         """
         "*** YOUR CODE HERE ***"
+        accurate = False
+        while(not accurate):
+            accurate = True
+            for x, y in dataset.iterate_once(1):
+                prediction = self.get_prediction(x)
+                if not prediction == nn.as_scalar(y):
+                    accurate = False
+                    self.w.update(x,nn.as_scalar(y))
 
 class RegressionModel(object):
     """
@@ -51,11 +63,27 @@ class RegressionModel(object):
     def __init__(self):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        self.learn_rate = 0.2
+        #20 = layer size
+        # input layer
+        self.w1 = nn.Parameter(1,20)
+        self.b1 = nn.Parameter(1,20)
+        # adjacent layer
+        self.w2 = nn.Parameter(20,20)
+        self.b2 = nn.Parameter(1,20)
+        # outputlayer
+        self.w3 = nn.Parameter(20,1)
+        self.b3 = nn.Parameter(1,1)
+        # big enough batch size
+        self.batch_size = 200
+        # store all layer parameters
+        self.w =[self.w1, self.w2, self.w3]
+        self.b = [self.b1,self.b2, self.b3]
+
 
     def run(self, x):
         """
         Runs the model for a batch of examples.
-
         Inputs:
             x: a node with shape (batch_size x 1)
         Returns:
@@ -63,10 +91,29 @@ class RegressionModel(object):
         """
         "*** YOUR CODE HERE ***"
 
+        # input data is initially x
+        input = x
+        # loop thorugh based on number of neural network layers
+        for i in range(3):
+            # nn.Linear(features, weights) ; 
+            # use linear regression function to get output node with shape from output features * batch_size
+            # from features and weights
+            fx = nn.Linear(input,self.w[i])
+            output = nn.AddBias(fx, self.b[i])
+
+            # last layer of nn does not need to call (activation) fx
+            # activation fx decides whether neuron activates or not
+            if (i==2):
+                return output
+            else:
+                # if not last layer of nn, call ReLu function, clear out neg entries (unactiv. nodes)
+                # calculate input data for next layer
+                input = nn.ReLU(output)
+
+
     def get_loss(self, x, y):
         """
         Computes the loss for a batch of examples.
-
         Inputs:
             x: a node with shape (batch_size x 1)
             y: a node with shape (batch_size x 1), containing the true y-values
@@ -74,12 +121,34 @@ class RegressionModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        predicted_y = self.run(x)
+        return nn.SquareLoss(predicted_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+
+        # store loss val and loop until loss accuracy reaches required limit
+        lossnum = float('inf')
+        count = 0
+        while lossnum >=0.01:
+            # get cobination of (x,y) from dataset as training data
+            for (x,y) in dataset.iterate_once(self.batch_size):
+                # calculate loss val with loss function
+                loss=self.get_loss(x,y)
+                lossnum = nn.as_scalar(loss)
+                # find gradient
+                grads = nn.gradients(loss, self.w +self.b)
+                # loop over parameters in gradient to update each weight and bias
+                for i in range(3):
+                    self.w[i].update(grads[i], -self.learn_rate)
+                    self.b[i].update(grads[len(self.w)+i],-self.learn_rate)
+                count+=1
+            print(count)
+
+
 
 class DigitClassificationModel(object):
     """
@@ -114,6 +183,7 @@ class DigitClassificationModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+
 
     def get_loss(self, x, y):
         """
@@ -154,6 +224,85 @@ class LanguageIDModel(object):
 
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
+        self.learn_rate = 0.2
+        layerSize = 100
+        # input layer
+        self.u1 = nn.Parameter(self.num_chars,layerSize)
+        self.w1 = nn.Parameter(len(self.languages), layerSize)
+        self.b1 = nn.Parameter(1,layerSize)
+        # adjacent layer
+        self.u2 = nn.Parameter(layerSize,layerSize)
+        self.w2 = nn.Parameter(layerSize,layerSize)
+        self.b2 = nn.Parameter(1,layerSize)
+
+        # self.u4 = nn.Parameter(layerSize,layerSize)
+        # self.w4 = nn.Parameter(layerSize,layerSize)
+        # self.b4 = nn.Parameter(1,layerSize)
+        # output layer
+        self.u3 = nn.Parameter(layerSize,len(self.languages))
+        self.w3 = nn.Parameter(layerSize, len(self.languages))
+        self.b3 = nn.Parameter(1,len(self.languages))
+
+        # big enough batch size
+        self.batch_size = 500
+        # store all layer parameters
+        self.u = [self.u1, self.u2, self.u3] # weights for inputs; multiplied by x
+        self.w = [self.w1, self.w2, self.w3] # weights for hidden layers; multiplied with h
+        self.b = [self.b1, self.b2, self.b3]
+        # self.b = [self.b1, self.b3] # biases; never used
+        # self.u = [self.u1, self.u3]
+        # self.w = [self.w1, self.w3]
+        # self.b = nn.Parameter(1,self.batch_size)
+
+
+    def weightMultiplication(self,x,w,b):
+        # input data is initially x
+        input = x      
+        # loop thorugh based on number of neural network layers
+        for i in range(len(w)):
+            output = nn.Linear(input,w[i])
+            # output = nn.Add(fx,b[i])
+            # last layer of nn does not need to call (activation) fx
+            # activation fx decides whether neuron activates or not
+            if (i==len(w)-1):
+                return output
+            else:
+                # if not last layer of nn, call ReLu function, clear out neg entries (unactiv. nodes)
+                # calculate input data for next layer
+                input = nn.ReLU(output)
+
+    def weightMultiplicationNoBias(self,x,w):
+        input = x      
+        for i in range(len(w)):
+            output = nn.Linear(input,w[i])
+            if (i==len(w)-1):
+                return output
+            else:
+                input = nn.ReLU(output)
+
+    def weightMultWithBP(self,x,h,u,w,b):
+        xu = self.weightMultiplicationNoBias(x,u)
+        hw = self.weightMultiplicationNoBias(h,w)
+        # output = nn.Add(nn.Add(xu,hw),b)
+        output = nn.Add(xu,hw)
+        return output
+
+        # add them every layer (doesn't work because matrices are different sizes)
+        # input = x
+        # hinput = h
+        # for i in range(len(w)):
+        #     xu = nn.Linear(input,u[i])
+        #     hw = nn.Linear(hinput,w[i])
+        #     output = nn.Add(nn.Add(xu,hw),b[i])
+        #     if(i==len(w)-1):
+                
+        #         return output
+        #     else:
+        #         input = nn.ReLU(output)
+
+      
+    
+
 
     def run(self, xs):
         """
@@ -185,6 +334,11 @@ class LanguageIDModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
+        h = self.weightMultiplication(xs[0],self.u,self.b)
+        for i in range(1,len(xs)):
+            h = self.weightMultWithBP(xs[i], h, self.u, self.w, self.b)
+        return h 
+
 
     def get_loss(self, xs, y):
         """
@@ -201,9 +355,32 @@ class LanguageIDModel(object):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
+        logits = self.run(xs)
+        return nn.SoftmaxLoss(logits,y)
+
 
     def train(self, dataset):
         """
         Trains the model.
         """
         "*** YOUR CODE HERE ***"
+        accuracy = 0
+        count = 0
+        while accuracy < .83:
+            print("accuracy: " + str(accuracy))
+            # get cobination of (x,y) from dataset as training data
+            for (x,y) in dataset.iterate_once(self.batch_size):
+                # calculate loss val with loss function
+                loss=self.get_loss(x,y)
+                accuracy = dataset.get_validation_accuracy()
+                # find gradient
+                grads = nn.gradients(loss, self.u + self.w + self.b)
+                # loop over parameters in gradient to update each weight and bias
+                for i in range(len(self.u)):
+                    self.u[i].update(grads[i], -self.learn_rate)
+                    self.w[i].update(grads[len(self.u)+i], -self.learn_rate)
+                    self.b[i].update(grads[len(self.u)+len(self.w)+i], -self.learn_rate)
+                    
+                count+=1
+            print(count)
+        
