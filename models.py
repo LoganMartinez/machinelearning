@@ -226,83 +226,22 @@ class LanguageIDModel(object):
         "*** YOUR CODE HERE ***"
         self.learn_rate = 0.2
         layerSize = 100
+        self.batch_size = 200
         # input layer
-        self.u1 = nn.Parameter(self.num_chars,layerSize)
-        self.w1 = nn.Parameter(len(self.languages), layerSize)
-        self.b1 = nn.Parameter(1,layerSize)
-        # adjacent layer
-        self.u2 = nn.Parameter(layerSize,layerSize)
-        self.w2 = nn.Parameter(layerSize,layerSize)
-        self.b2 = nn.Parameter(1,layerSize)
+        self.w1 = nn.Parameter(self.num_chars, layerSize)
+        self.b1 = nn.Parameter(1, layerSize)
 
-        # self.u4 = nn.Parameter(layerSize,layerSize)
-        # self.w4 = nn.Parameter(layerSize,layerSize)
-        # self.b4 = nn.Parameter(1,layerSize)
+        # hidden layer
+        self.hidden_w = nn.Parameter(layerSize,layerSize)
+
         # output layer
-        self.u3 = nn.Parameter(layerSize,len(self.languages))
-        self.w3 = nn.Parameter(layerSize, len(self.languages))
-        self.b3 = nn.Parameter(1,len(self.languages))
+        self.w2 = nn.Parameter(layerSize,len(self.languages))
+        self.b2 = nn.Parameter(1,len(self.languages))
 
-        # big enough batch size
-        self.batch_size = 500
         # store all layer parameters
-        self.u = [self.u1, self.u2, self.u3] # weights for inputs; multiplied by x
-        self.w = [self.w1, self.w2, self.w3] # weights for hidden layers; multiplied with h
-        self.b = [self.b1, self.b2, self.b3]
-        # self.b = [self.b1, self.b3] # biases; never used
-        # self.u = [self.u1, self.u3]
-        # self.w = [self.w1, self.w3]
-        # self.b = nn.Parameter(1,self.batch_size)
-
-
-    def weightMultiplication(self,x,w,b):
-        # input data is initially x
-        input = x      
-        # loop thorugh based on number of neural network layers
-        for i in range(len(w)):
-            output = nn.Linear(input,w[i])
-            # output = nn.Add(fx,b[i])
-            # last layer of nn does not need to call (activation) fx
-            # activation fx decides whether neuron activates or not
-            if (i==len(w)-1):
-                return output
-            else:
-                # if not last layer of nn, call ReLu function, clear out neg entries (unactiv. nodes)
-                # calculate input data for next layer
-                input = nn.ReLU(output)
-
-    def weightMultiplicationNoBias(self,x,w):
-        input = x      
-        for i in range(len(w)):
-            output = nn.Linear(input,w[i])
-            if (i==len(w)-1):
-                return output
-            else:
-                input = nn.ReLU(output)
-
-    def weightMultWithBP(self,x,h,u,w,b):
-        xu = self.weightMultiplicationNoBias(x,u)
-        hw = self.weightMultiplicationNoBias(h,w)
-        # output = nn.Add(nn.Add(xu,hw),b)
-        output = nn.Add(xu,hw)
-        return output
-
-        # add them every layer (doesn't work because matrices are different sizes)
-        # input = x
-        # hinput = h
-        # for i in range(len(w)):
-        #     xu = nn.Linear(input,u[i])
-        #     hw = nn.Linear(hinput,w[i])
-        #     output = nn.Add(nn.Add(xu,hw),b[i])
-        #     if(i==len(w)-1):
-                
-        #         return output
-        #     else:
-        #         input = nn.ReLU(output)
-
-      
-    
-
+        self.w = [self.w1,self.w2]
+        self.b = [self.b1,self.b2]
+        self.parameters = self.w + self.b + [self.hidden_w]
 
     def run(self, xs):
         """
@@ -334,10 +273,16 @@ class LanguageIDModel(object):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
-        h = self.weightMultiplication(xs[0],self.u,self.b)
+        # initial h
+        z = nn.Linear(xs[0],self.w1)
+        h = nn.ReLU(nn.AddBias(z,self.b1))   
+        # subsequent h's, using previous h's
         for i in range(1,len(xs)):
-            h = self.weightMultWithBP(xs[i], h, self.u, self.w, self.b)
-        return h 
+            z = nn.Add(nn.Linear(xs[i],self.w1), nn.Linear(h,self.hidden_w))
+            h = nn.ReLU(nn.AddBias(z,self.b1))
+        # convert to output size
+        return nn.AddBias(nn.Linear(h,self.w2),self.b2)
+        
 
 
     def get_loss(self, xs, y):
@@ -366,21 +311,12 @@ class LanguageIDModel(object):
         "*** YOUR CODE HERE ***"
         accuracy = 0
         count = 0
-        while accuracy < .83:
-            print("accuracy: " + str(accuracy))
-            # get cobination of (x,y) from dataset as training data
+        while accuracy < .85:
             for (x,y) in dataset.iterate_once(self.batch_size):
-                # calculate loss val with loss function
                 loss=self.get_loss(x,y)
-                accuracy = dataset.get_validation_accuracy()
-                # find gradient
-                grads = nn.gradients(loss, self.u + self.w + self.b)
-                # loop over parameters in gradient to update each weight and bias
-                for i in range(len(self.u)):
-                    self.u[i].update(grads[i], -self.learn_rate)
-                    self.w[i].update(grads[len(self.u)+i], -self.learn_rate)
-                    self.b[i].update(grads[len(self.u)+len(self.w)+i], -self.learn_rate)
-                    
+                grads = nn.gradients(loss, self.parameters)
+                for i in range(len(self.parameters)):
+                    self.parameters[i].update(grads[i], -self.learn_rate)
                 count+=1
-            print(count)
+                accuracy = dataset.get_validation_accuracy()
         
